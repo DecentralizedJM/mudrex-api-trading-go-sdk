@@ -33,8 +33,9 @@ const (
 	OrderStatusExpired          OrderStatus = "EXPIRED"
 	
 	// Position statuses
-	PositionStatusOpen   PositionStatus = "OPEN"
-	PositionStatusClosed PositionStatus = "CLOSED"
+	PositionStatusOpen       PositionStatus = "OPEN"
+	PositionStatusClosed     PositionStatus = "CLOSED"
+	PositionStatusLiquidated PositionStatus = "LIQUIDATED"
 	
 	// Wallet types
 	WalletTypeSpot    WalletType = "SPOT"
@@ -43,19 +44,19 @@ const (
 
 // Wallet Models
 type WalletBalance struct {
-	Total        string `json:"total"`
-	Available    string `json:"available"`
-	Rewards      string `json:"rewards"`
-	Withdrawable string `json:"withdrawable"`
-	Currency     string `json:"currency"`
+	Total             string `json:"total"`
+	Withdrawable      string `json:"withdrawable"`
+	Invested          string `json:"invested"`
+	Rewards           string `json:"rewards"`
+	CoinInvestable    string `json:"coin_investable"`
+	CoinsetInvestable string `json:"coinset_investable"`
+	VaultInvestable   string `json:"vault_investable"`
 }
 
 type FuturesBalance struct {
-	Balance           string `json:"balance"`
-	AvailableTransfer string `json:"available_transfer"`
-	UnrealizedPnL    string `json:"unrealized_pnl"`
-	MarginUsed        string `json:"margin_used"`
-	Currency          string `json:"currency"`
+	Balance        string `json:"balance"`
+	LockedAmount   string `json:"locked_amount"`
+	FirstTimeUser  bool   `json:"first_time_user"`
 }
 
 type TransferResult struct {
