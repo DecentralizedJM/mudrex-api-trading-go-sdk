@@ -410,16 +410,25 @@ Common order errors from the API (see [Create new order](https://docs.trade.mudr
 
 ## Rate Limits
 
-Per the [Create new order](https://docs.trade.mudrex.com/docs/post-market-order) docs:
+Per the [Authentication & Rate Limits](https://docs.trade.mudrex.com/docs/authentication-rate-limits) docs, limits are enforced **per API key**. This SDK does **not** throttle requests. If you exceed a limit, the API returns 429 and the SDK returns `MudrexAPIError`.
+
+### Default limits (most endpoints)
 
 | Duration | Limit |
 |---|---|
-| Second | 5 |
-| Minute | 125 |
-| Hour | 2500 |
-| Day | 25000 |
+| Second | 10 |
+| Minute | 500 |
+| Hour | 30,000 |
 
-This SDK does **not** throttle requests. If you exceed the limit, the API returns 429 and the SDK returns `MudrexAPIError`.
+### Wallet limits (`/fapi/v1/wallet/*`)
+
+Spot wallet balance and spot↔futures transfer endpoints use **separate** limits:
+
+| Duration | Limit |
+|---|---|
+| Second | 2 |
+| Minute | 50 |
+| Hour | 1,000 |
 
 ## Testing
 
