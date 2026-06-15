@@ -2,6 +2,8 @@
 
 Unofficial Go SDK for the [Mudrex Trading API](https://docs.trade.mudrex.com). It supports the **Futures Trading API** (orders, positions, leverage, wallet, etc.) via a flat `TradeClient`.
 
+**Repository:** [github.com/DecentralizedJM/mudrex-api-trading-go-sdk](https://github.com/DecentralizedJM/mudrex-api-trading-go-sdk)  
+**Default branch:** `main` (this is the only branch — all development and releases happen here)  
 **Built and maintained by [DecentralizedJM](https://github.com/DecentralizedJM)**
 
 ## Installation
@@ -10,6 +12,12 @@ Requires Go 1.21 or higher:
 
 ```bash
 go get github.com/DecentralizedJM/mudrex-api-trading-go-sdk
+```
+
+Import the module in your code:
+
+```go
+import mudrex "github.com/DecentralizedJM/mudrex-api-trading-go-sdk"
 ```
 
 ## Quick Start
@@ -77,6 +85,178 @@ export MUDREX_API_SECRET="your_api_secret"
 client, err := mudrex.NewClientWithOptions(mudrex.ClientOptions{})
 ```
 
+## Place Orders (from [Create new order](https://docs.trade.mudrex.com/docs/post-market-order))
+
+The samples below mirror the official API documentation curl requests, converted to this SDK.  
+Pass numeric fields as **strings** for precision (e.g. `"50"`, `"0.01"`).
+
+### Sample 1 — Market order by asset ID (with SL/TP)
+
+Official request:
+
+```bash
+curl -X POST "https://trade.mudrex.com/fapi/v1/futures/{asset_id}/order" \
+  -H "Content-Type: application/json" \
+  -H "X-Authentication: your-secret-key" \
+  -d '{
+    "leverage": 50,
+    "quantity": 0.01,
+    "order_price": 12445627,
+    "order_type": "LONG",
+    "trigger_type": "MARKET",
+    "is_takeprofit": true,
+    "is_stoploss": true,
+    "stoploss_price": 3800,
+    "takeprofit_price": 5000,
+    "reduce_only": false
+  }'
+```
+
+Go SDK equivalent:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	mudrex "github.com/DecentralizedJM/mudrex-api-trading-go-sdk"
+)
+
+func str(v string) *string { return &v }
+
+func main() {
+	client, err := mudrex.NewClient("your-secret-key")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+		AssetID:         "your-asset-uuid", // path: /futures/{asset_id}/order
+		Leverage:        "50",
+		Quantity:        "0.01",
+		OrderPrice:      str("12445627"),
+		OrderType:       "LONG",
+		TriggerType:     "MARKET",
+		IsTakeprofit:    true,
+		IsStoploss:      true,
+		StoplossPrice:   str("3800"),
+		TakeprofitPrice: str("5000"),
+		ReduceOnly:      false,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	orderID, _ := resp.GetString("order_id")
+	status, _ := resp.GetString("status")
+	fmt.Printf("order_id=%s status=%s\n", orderID, status)
+}
+```
+
+Expected response fields (from the API docs): `order_id`, `leverage`, `amount`, `quantity`, `price`, `status`, `message`.
+
+### Sample 2 — Symbol-first order (`BTCUSDT` + `is_symbol`)
+
+Official request:
+
+```bash
+curl -X POST "https://trade.mudrex.com/fapi/v1/futures/BTCUSDT/order?is_symbol" \
+  -H "Content-Type: application/json" \
+  -H "X-Authentication: your-secret-key" \
+  -d '{
+    "leverage": 50,
+    "quantity": 0.01,
+    "order_price": 12445627,
+    "order_type": "LONG",
+    "trigger_type": "MARKET",
+    "is_takeprofit": true,
+    "is_stoploss": true,
+    "stoploss_price": 3800,
+    "takeprofit_price": 5000,
+    "reduce_only": false
+  }'
+```
+
+Go SDK equivalent (the SDK adds `?is_symbol=true` automatically when you pass `Symbol`):
+
+```go
+resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+	Symbol:          "BTCUSDT",
+	Leverage:        "50",
+	Quantity:        "0.01",
+	OrderPrice:      str("12445627"),
+	OrderType:       "LONG",
+	TriggerType:     "MARKET",
+	IsTakeprofit:    true,
+	IsStoploss:      true,
+	StoplossPrice:   str("3800"),
+	TakeprofitPrice: str("5000"),
+	ReduceOnly:      false,
+})
+```
+
+### Sample 3 — Simple market long (no SL/TP)
+
+```go
+resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+	Symbol:      "BTCUSDT",
+	Leverage:    "10",
+	Quantity:    "0.001",
+	OrderType:   "LONG",
+	TriggerType: "MARKET",
+})
+```
+
+### Sample 4 — Limit order
+
+```go
+resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+	Symbol:       "ETHUSDT",
+	Leverage:     "5",
+	Quantity:     "0.1",
+	OrderType:    "SHORT",
+	TriggerType:  "LIMIT",
+	OrderPrice:   str("3000"),
+})
+```
+
+### Sample 5 — Reduce-only close order
+
+If you have an open `LONG` position, use `SHORT` with `ReduceOnly: true`:
+
+```go
+resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+	Symbol:      "BTCUSDT",
+	Leverage:    "10",
+	Quantity:    "0.001",
+	OrderType:   "SHORT", // opposite of existing position
+	TriggerType: "MARKET",
+	ReduceOnly:  true,
+})
+```
+
+### Runnable example
+
+A copy-pasteable program lives at [`examples/place_order/main.go`](examples/place_order/main.go):
+
+```bash
+export MUDREX_API_SECRET="your-secret-key"
+go run ./examples/place_order
+```
+
+### Order placement notes (from API docs)
+
+| Topic | Detail |
+|---|---|
+| `order_type` | `LONG` or `SHORT` |
+| `trigger_type` | `MARKET` or `LIMIT` |
+| `order_price` | Required for limit-style pricing; must be within min/max for the asset |
+| SL/TP | If `IsStoploss` / `IsTakeprofit` is `true`, the matching price field is required |
+| `reduce_only` | When `true`, order type must be opposite of the open position |
+| Symbol vs UUID | Pass `Symbol: "BTCUSDT"` (recommended) or `AssetID: "uuid-..."` |
+
 ## Configuration
 
 ```go
@@ -118,7 +298,7 @@ client, err := mudrex.NewClientWithOptions(mudrex.ClientOptions{
 
 | Method | Description |
 |---|---|
-| `PlaceOrder(PlaceOrderRequest)` | Place a new order |
+| `PlaceOrder(PlaceOrderRequest)` | Place a new order — see [Place Orders](#place-orders-from-create-new-order) |
 | `GetOrders(limit, offset)` | Get open orders |
 | `GetOrder(orderID)` | Get a single order |
 | `GetOrderHistory(limit, offset)` | Get order history |
@@ -190,6 +370,18 @@ raw, _ := resp.Result()
 
 **ID conventions:** `PlaceOrder` returns `order_id`; list endpoints use `id` on each item.
 
+```go
+resp, _ := client.PlaceOrder(...)
+orderID, _ := resp.GetString("order_id")
+client.CancelOrder(orderID)
+
+orders, _ := client.GetOrders(20, nil)
+for _, o := range orders {
+	id, _ := o.GetString("id")
+	client.CancelOrder(id)
+}
+```
+
 ## Error Handling
 
 ```go
@@ -205,9 +397,29 @@ if errors.As(err, &reqErr) {
 }
 ```
 
+Common order errors from the API (see [Create new order](https://docs.trade.mudrex.com/docs/post-market-order)):
+
+| HTTP | Message |
+|---|---|
+| 400 | Params error |
+| 400 | invalid trigger type |
+| 400 | invalid order type |
+| 400 | order price out of permissible range |
+| 400 | quantity not a multiple of the quantity step |
+| 400 | leverage out of permissible range |
+
 ## Rate Limits
 
-The Mudrex API enforces rate limits (2 req/s, 50/min, 1000/hr, 10000/day). This SDK does **not** throttle requests. If you exceed the limit, the API returns 429 and the SDK returns `MudrexAPIError`.
+Per the [Create new order](https://docs.trade.mudrex.com/docs/post-market-order) docs:
+
+| Duration | Limit |
+|---|---|
+| Second | 5 |
+| Minute | 125 |
+| Hour | 2500 |
+| Day | 25000 |
+
+This SDK does **not** throttle requests. If you exceed the limit, the API returns 429 and the SDK returns `MudrexAPIError`.
 
 ## Testing
 
