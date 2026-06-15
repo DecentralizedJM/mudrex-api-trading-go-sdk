@@ -1,28 +1,18 @@
 # Mudrex Go SDK
 
-[![Go 1.21+](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org/dl/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub](https://img.shields.io/github/stars/DecentralizedJM/mudrex-go-sdk?style=social)](https://github.com/DecentralizedJM/mudrex-go-sdk)
-
-**Unofficial Go SDK for [Mudrex Futures Trading API](https://docs.trade.mudrex.com/docs/overview)** - High-performance trading client for Go developers.
+Unofficial Go SDK for the [Mudrex Trading API](https://docs.trade.mudrex.com). It supports the **Futures Trading API** (orders, positions, leverage, wallet, etc.) via a flat `TradeClient`.
 
 **Built and maintained by [DecentralizedJM](https://github.com/DecentralizedJM)**
 
-## 🚀 Features
+## Installation
 
-- **Simple & Intuitive** - Go-native interface that feels natural
-- **Type-Safe** - Full type definitions and models
-- **High-Performance** - Built-in rate limiting and efficient request handling
-- **Well-Documented** - Comprehensive examples and docstrings
-- **Production-Ready** - Designed for real trading applications
-
-## 📦 Installation
+Requires Go 1.21 or higher:
 
 ```bash
-go get github.com/DecentralizedJM/mudrex-go-sdk
+go get github.com/DecentralizedJM/mudrex-api-trading-go-sdk
 ```
 
-## ⚡ Quick Start
+## Quick Start
 
 ```go
 package main
@@ -30,180 +20,209 @@ package main
 import (
 	"fmt"
 	"log"
-	
-	mudrex "github.com/DecentralizedJM/mudrex-go-sdk"
+
+	mudrex "github.com/DecentralizedJM/mudrex-api-trading-go-sdk"
 )
 
 func main() {
-	// Initialize the client
-	client := mudrex.NewClient("your-api-secret")
-	defer client.Close()
-	
-	// Check your balance
-	balance, err := client.Wallet.GetFuturesBalance()
+	client, err := mudrex.NewClient("your_api_secret")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Balance: %s %s\n", balance.Balance, balance.Currency)
-	
-	// List tradable assets
-	assets, err := client.Assets.ListAll(1, 10, "", "")
+
+	resp, err := client.PlaceOrder(mudrex.PlaceOrderRequest{
+		Symbol:      "BTCUSDT",
+		Leverage:    "10",
+		Quantity:    "0.001",
+		OrderType:   "LONG",
+		TriggerType: "MARKET",
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, asset := range assets {
-		fmt.Printf("%s: up to %sx leverage\n", asset.Symbol, asset.MaxLeverage)
-	}
-	
-	// Set leverage before trading
-	leverage, err := client.Leverage.Set("BTCUSDT", "10", mudrex.MarginTypeIsolated)
+
+	orderID, err := resp.GetString("order_id")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Leverage set to %s\n", leverage.Leverage)
-	
-	// Place a market order
-	order, err := client.Orders.CreateMarketOrder(
-		"BTCUSDT",
-		mudrex.OrderTypeLong,
-		"0.001",
-		"10",
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Order placed: %s\n", order.OrderID)
-	
-	// Monitor positions
-	positions, err := client.Positions.ListOpen()
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, pos := range positions {
-		fmt.Printf("%s: %s PnL\n", pos.Symbol, pos.UnrealizedPnL)
-	}
+	fmt.Println(orderID)
 }
 ```
 
-## 📚 Documentation
-
-### API Modules
-
-| Module | Description |
-|--------|-------------|
-| `client.Wallet` | Spot & futures wallet balances, fund transfers |
-| `client.Assets` | Discover tradable instruments, get specifications |
-| `client.Leverage` | Get/set leverage and margin type |
-| `client.Orders` | Create, view, cancel, and amend orders |
-| `client.Positions` | Manage positions, set SL/TP, close/reverse |
-| `client.Fees` | View trading fee history |
-
-### Complete Trading Workflow
+The client pings the API on creation — a bad secret or unreachable server returns an error immediately:
 
 ```go
-// 1. Check available balance
-balance, _ := client.Wallet.GetFuturesBalance()
-
-// 2. Discover available assets
-assets, _ := client.Assets.ListAll(1, 50, "symbol", "asc")
-
-// 3. Set leverage for the asset
-client.Leverage.Set("BTCUSDT", "5", mudrex.MarginTypeIsolated)
-
-// 4. Place an order with stop loss and take profit
-order, _ := client.Orders.CreateMarketOrder(
-	"BTCUSDT",
-	mudrex.OrderTypeLong,
-	"0.001",
-	"5",
-)
-
-// 5. Monitor your position
-positions, _ := client.Positions.ListOpen()
-for _, pos := range positions {
-	if pos.PositionID == order.OrderID {
-		// Set stop loss at 5% below entry
-		sl := "95000"
-		client.Positions.SetStopLoss(pos.PositionID, sl)
-	}
-}
-
-// 6. Close position when ready
-client.Positions.Close(order.OrderID)
-```
-
-## 🔧 Configuration
-
-### Custom Base URL and Timeout
-
-```go
-client := mudrex.NewClientWithConfig(
-	"your-api-secret",
-	"https://custom.mudrex.com/fapi/v1",
-	30*time.Second,
-)
-```
-
-## ⚠️ Error Handling
-
-```go
-import "github.com/DecentralizedJM/mudrex-go-sdk"
-
-balance, err := client.Wallet.GetFuturesBalance()
-if err != nil {
-	switch e := err.(type) {
-	case *mudrex.AuthenticationError:
-		fmt.Println("Invalid API secret")
-	case *mudrex.RateLimitError:
-		fmt.Println("Rate limit exceeded, waiting...")
-	case *mudrex.InsufficientBalanceError:
-		fmt.Println("Insufficient balance for this trade")
-	case *mudrex.ValidationError:
-		fmt.Println("Invalid request parameters")
-	default:
-		fmt.Printf("Error: %v\n", e)
-	}
+_, err := mudrex.NewClient("wrong_secret")
+var apiErr *mudrex.MudrexAPIError
+if errors.As(err, &apiErr) {
+	fmt.Println(apiErr) // [401] Invalid Authentication
 }
 ```
 
-## 🧪 Testing
+You can also ping anytime to verify connectivity and credentials:
+
+```go
+if err := client.Ping(); err != nil {
+	log.Fatal(err)
+}
+```
+
+Or set the API secret via environment variable:
+
+```bash
+export MUDREX_API_SECRET="your_api_secret"
+```
+
+```go
+client, err := mudrex.NewClientWithOptions(mudrex.ClientOptions{})
+```
+
+## Configuration
+
+```go
+client, err := mudrex.NewClientWithOptions(mudrex.ClientOptions{
+	APISecret:     "...",
+	TradeCurrency: "USDT", // only USDT supported; this is the default
+	Timeout:       10 * time.Second,
+	MaxRetries:    3, // retries on network errors only
+	LogRequests:   true,
+})
+```
+
+**Numeric parameters** (quantity, leverage, prices, amount, margin, etc.) should be passed as **strings** (e.g. `"0.001"`, `"10"`) for precision — the API expects string numerics.
+
+## API Reference
+
+### Client
+
+| Method | Description |
+|---|---|
+| `Ping()` | Verify connectivity and API secret; returns error on failure |
+
+### Futures / Assets
+
+| Method | Description |
+|---|---|
+| `ListFutures(limit, offset, sort, order)` | List available futures contracts |
+| `GetFuture(symbol, assetID)` | Get a single futures contract |
+| `GetAvailableFunds(source)` | Get available trading funds |
+
+### Leverage
+
+| Method | Description |
+|---|---|
+| `GetLeverage(symbol, assetID)` | Get current leverage and margin type |
+| `SetLeverage(symbol, assetID, leverage, marginType)` | Set leverage for an asset |
+
+### Orders
+
+| Method | Description |
+|---|---|
+| `PlaceOrder(PlaceOrderRequest)` | Place a new order |
+| `GetOrders(limit, offset)` | Get open orders |
+| `GetOrder(orderID)` | Get a single order |
+| `GetOrderHistory(limit, offset)` | Get order history |
+| `AmendOrder(AmendOrderRequest)` | Amend a limit order |
+| `CancelOrder(orderID)` | Cancel an open order |
+
+### Positions
+
+| Method | Description |
+|---|---|
+| `GetPositions(limit, offset)` | Get open positions |
+| `GetPositionHistory(limit, offset)` | Get position history |
+| `ClosePosition(positionID)` | Close entire position |
+| `ClosePositionPartial(positionID, quantity, orderType, limitPrice)` | Partially close |
+| `ReversePosition(positionID)` | Reverse a position |
+| `PlaceRiskOrder(...)` | Add SL/TP |
+| `AmendRiskOrder(AmendRiskOrderRequest)` | Amend SL/TP |
+| `AddMargin(positionID, margin)` | Add margin |
+| `GetLiquidationPrice(positionID, extMargin)` | Get liquidation price |
+
+### Fees
+
+| Method | Description |
+|---|---|
+| `GetFeeHistory(limit, offset)` | Get trading fee history |
+
+### Wallet
+
+| Method | Description |
+|---|---|
+| `GetWalletFunds()` | Get wallet balances |
+| `Transfer(fromWallet, toWallet, amount)` | Transfer between wallets |
+
+## Using Symbols vs UUIDs
+
+By default, asset-related methods use trading symbols (e.g. `"BTCUSDT"`). To use a raw asset UUID, pass it as `assetID` and leave `symbol` empty:
+
+```go
+client.GetLeverage("BTCUSDT", "")                     // by symbol (recommended)
+client.GetLeverage("", "550e8400-e29b-41d4-716-446655440000") // by UUID
+```
+
+## Response Format
+
+Methods return a `Response` map or a slice of them. Use `GetString`, `GetBool`, or `Get` to read fields:
+
+```go
+resp, _ := client.GetLeverage("BTCUSDT", "")
+leverage, _ := resp.GetString("leverage")
+marginType, _ := resp.GetString("margin_type")
+```
+
+List endpoints return `[]Response`:
+
+```go
+orders, _ := client.GetOrders(20, nil)
+for _, order := range orders {
+	id, _ := order.GetString("id")
+	fmt.Println(id)
+}
+```
+
+Scalar API values are wrapped in a `result` field:
+
+```go
+resp, _ := client.GetLiquidationPrice("pid-1", nil)
+raw, _ := resp.Result()
+```
+
+**ID conventions:** `PlaceOrder` returns `order_id`; list endpoints use `id` on each item.
+
+## Error Handling
+
+```go
+_, err := client.PlaceOrder(mudrex.PlaceOrderRequest{...})
+var apiErr *mudrex.MudrexAPIError
+if errors.As(err, &apiErr) {
+	fmt.Printf("API error [%d]: %s\n", apiErr.Code, apiErr.Message)
+}
+
+var reqErr *mudrex.MudrexRequestError
+if errors.As(err, &reqErr) {
+	fmt.Printf("Network error: %s\n", reqErr.Message)
+}
+```
+
+## Rate Limits
+
+The Mudrex API enforces rate limits (2 req/s, 50/min, 1000/hr, 10000/day). This SDK does **not** throttle requests. If you exceed the limit, the API returns 429 and the SDK returns `MudrexAPIError`.
+
+## Testing
 
 ```bash
 go test ./...
 ```
 
-## 🤝 Contributing
+## License
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+MIT — see [LICENSE](LICENSE) for details.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Disclaimer
 
-## 👥 Contributors
-
-- [@DecentralizedJM](https://github.com/DecentralizedJM) - Creator & Maintainer
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🔗 Links
-
-- [Mudrex Trading API Docs](https://docs.trade.mudrex.com/docs/overview)
-- [API Quick Reference](https://docs.trade.mudrex.com/docs/overview)
-- [Mudrex Platform](https://mudrex.com)
-
-## ⚠️ Disclaimer
-
-**This is an UNOFFICIAL SDK.** This SDK is for educational and informational purposes. Cryptocurrency trading involves significant risk. Always:
-- Start with small amounts
-- Use proper risk management (stop-losses)
-- Never trade more than you can afford to lose
-- Test thoroughly in a safe environment first
+**This is an UNOFFICIAL SDK** for educational and informational purposes. Cryptocurrency trading involves significant risk. Always use proper risk management and test thoroughly before trading with real funds.
 
 ---
 
-Built and maintained by [DecentralizedJM](https://github.com/DecentralizedJM) with ❤️
+Built and maintained by DecentralizedJM
